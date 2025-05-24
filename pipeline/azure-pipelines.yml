@@ -1,0 +1,54 @@
+trigger:
+- main
+
+variables:
+  vmImageName: 'ubuntu-latest'
+  dirProject: './src'
+  urlGitleaksRelease: 'https://github.com/gitleaks/gitleaks/releases/download/v8.26.0/gitleaks_8.26.0_linux_x64.tar.gz'
+
+stages:
+- stage: SecretsScanning
+  displayName: Secrets Scanning stage
+  jobs:
+  - job: SecretsScanning
+    displayName: Secrets Scanning Scanning
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - script: |
+        mkdir tmp-gitleaks
+        cd tmp-gitleaks
+        echo ''
+        echo 'Url utilizada para download do Gitleaks: $(urlGitleaksRelease)'
+        echo ''
+        curl -L -o gitleaks.tar.gz $(urlGitleaksRelease)
+        tar -xvzf gitleaks.tar.gz
+        cd gitleaks
+        chmod +x gitleaks
+        sudo mv gitleaks /usr/local/bin/
+        cd ..
+        rm -rf tmp-gitleaks
+      displayName: Instalar o Gitleaks
+    - script: |
+        gitleaks --version
+        echo ''
+        gitleaks --help
+      displayName: Testar o Gitleaks
+    - script: |
+        mkdir results
+      displayName: Criar diretorio /results para armazenar os resultados gerados com o Gitleaks
+    - script: |
+        curl -L -o ./results/report-basic.tmpl https://raw.githubusercontent.com/gitleaks/gitleaks/refs/heads/master/report_templates/basic.tmpl
+        gitleaks dir . --report-format=template --report-path=./results/results-secrets.html --report-template=./results/report-basic.tmpl
+      displayName: Executar o Gitleaks no repositorio
+    - script: |
+        cd results
+        pwd
+        ls -l
+      displayName: Exibir conteudo do diretorio /results apos analise com o Gitleaks
+      condition: always()
+    - task: PublishHtmlReport@1
+      inputs:
+        reportDir: './results/results-secrets.html'
+      displayName: Publicar resultados do Gitleak no formato HTML
+      condition: always()
